@@ -1,0 +1,16 @@
+# AI Chatbot API Testing Framework – Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# ─── Web / API ───────────────────────────────────────────────────────────────
+flask>=3.0.0            # Mock API server + Dashboard
+requests>=2.31.0        # HTTP client for tests
+
+# ─── Testing ─────────────────────────────────────────────────────────────────
+pytest>=8.0.0           # Test runner
+pytest-html>=4.1.0      # HTML test report generation
+
+# ─── Load testing ────────────────────────────────────────────────────────────
+locust>=2.24.0          # Load and performance testing
+
+# ─── Utilities ───────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0    # Environment variable management

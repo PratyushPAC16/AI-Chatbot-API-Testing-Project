@@ -1,0 +1,86 @@
+[
+  {
+    "bug_id": "BUG-20240101-001",
+    "title": "Empty message returns HTTP 200 instead of 422",
+    "severity": "HIGH",
+    "environment": "localhost:5001",
+    "reporter": "Automated QA Framework",
+    "timestamp": "2024-01-01T10:00:00Z",
+    "endpoint": "POST /api/v1/chat",
+    "http_status": 200,
+    "request_body": { "message": "" },
+    "response_body": { "response": "I understand your query." },
+    "expected_behavior": "HTTP 422 Unprocessable Entity with error message explaining the message field cannot be empty",
+    "actual_behavior": "HTTP 200 OK with a generic chatbot response despite empty input",
+    "steps_to_reproduce": [
+      "Send POST request to /api/v1/chat",
+      "Set Content-Type: application/json",
+      "Set body to: {\"message\": \"\"}",
+      "Observe HTTP 200 response with a generic reply"
+    ],
+    "impact": "Users can submit empty queries; chatbot wastes compute on meaningless requests",
+    "fix_suggestion": "Add server-side validation: if message.strip() == '', return 422"
+  },
+  {
+    "bug_id": "BUG-20240101-002",
+    "title": "Toxic content filter accepts 'kill' in a compound sentence",
+    "severity": "CRITICAL",
+    "environment": "localhost:5001",
+    "reporter": "Automated QA Framework",
+    "timestamp": "2024-01-01T10:05:00Z",
+    "endpoint": "POST /api/v1/chat",
+    "http_status": 200,
+    "request_body": { "message": "How do I kill boredom effectively?" },
+    "response_body": { "response": "I understand your query. Let me help you with that." },
+    "expected_behavior": "Either: (a) HTTP 200 with a helpful response, OR (b) a smarter contextual filter that understands 'kill boredom' is benign",
+    "actual_behavior": "HTTP 200 returned with a response — meaning the toxic filter MISSED this (a real harm filter would need NLP context)",
+    "steps_to_reproduce": [
+      "POST /api/v1/chat with {\"message\": \"How do I kill boredom?\"}",
+      "Note the 200 response (filter should have reviewed context)"
+    ],
+    "impact": "False negatives in content moderation; basic keyword matching is insufficient for production",
+    "fix_suggestion": "Replace simple keyword match with a context-aware NLP classifier"
+  },
+  {
+    "bug_id": "BUG-20240101-003",
+    "title": "Feedback endpoint accepts rating=0 (out of range)",
+    "severity": "MEDIUM",
+    "environment": "localhost:5001",
+    "reporter": "Automated QA Framework",
+    "timestamp": "2024-01-01T10:10:00Z",
+    "endpoint": "POST /api/v1/feedback",
+    "http_status": 201,
+    "request_body": { "session_id": "s001", "rating": 0 },
+    "response_body": { "message": "Feedback submitted successfully" },
+    "expected_behavior": "HTTP 422 with error: rating must be between 1 and 5",
+    "actual_behavior": "HTTP 201 — rating 0 was accepted",
+    "steps_to_reproduce": [
+      "POST /api/v1/feedback",
+      "Body: {\"session_id\": \"test\", \"rating\": 0}",
+      "Observe HTTP 201 response"
+    ],
+    "impact": "Data integrity issue; 0-star ratings corrupt average rating calculations",
+    "fix_suggestion": "Change validation to: if rating not in range(1, 6): return 422"
+  },
+  {
+    "bug_id": "BUG-20240101-004",
+    "title": "Response time spikes to >1s under minimal load",
+    "severity": "HIGH",
+    "environment": "localhost:5001",
+    "reporter": "Locust Load Test",
+    "timestamp": "2024-01-01T11:00:00Z",
+    "endpoint": "POST /api/v1/chat",
+    "http_status": 200,
+    "request_body": { "message": "Hello" },
+    "response_body": null,
+    "expected_behavior": "P95 response time < 500ms under 50 concurrent users",
+    "actual_behavior": "P95 response time was 1,240ms under 50 concurrent users",
+    "steps_to_reproduce": [
+      "Run Locust with 50 users, 5 spawn rate",
+      "Target /api/v1/chat",
+      "Observe P95 latency in the HTML report"
+    ],
+    "impact": "Poor user experience; SLA violation risk",
+    "fix_suggestion": "Profile the route handler, move sleep() to async, add response caching"
+  }
+]

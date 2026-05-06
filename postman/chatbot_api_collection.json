@@ -1,0 +1,273 @@
+{
+  "info": {
+    "name": "AI Chatbot API Testing Framework",
+    "description": "Complete Postman collection for testing the AI Chatbot API. Includes functional, edge case, and regression tests with pre-request scripts and test assertions.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "ai-chatbot-api-test-collection-v1"
+  },
+  "variable": [
+    { "key": "base_url",    "value": "http://localhost:5001", "type": "string" },
+    { "key": "session_id",  "value": "postman-test-session",  "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "🔍 Health Check",
+      "item": [
+        {
+          "name": "TC-P-001 GET /health – Returns 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is JSON', () => pm.response.to.be.json);",
+                  "pm.test('status field is healthy', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status).to.eql('healthy');",
+                  "});",
+                  "pm.test('Response time < 500ms', () => pm.expect(pm.response.responseTime).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "💬 Chat Endpoint",
+      "item": [
+        {
+          "name": "TC-P-002 POST /chat – Valid message",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"message\": \"Hello!\", \"session_id\": \"{{session_id}}\"}"
+            },
+            "url": { "raw": "{{base_url}}/api/v1/chat", "host": ["{{base_url}}"], "path": ["api","v1","chat"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has response field', () => pm.expect(pm.response.json()).to.have.property('response'));",
+                  "pm.test('Has session_id', () => pm.expect(pm.response.json()).to.have.property('session_id'));",
+                  "pm.test('Has latency_ms', () => pm.expect(pm.response.json().latency_ms).to.be.a('number'));",
+                  "pm.test('Response time < 2000ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+                  "pm.collectionVariables.set('last_response', pm.response.json().response);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-P-003 POST /chat – Empty message → 422",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"message\": \"\"}" },
+            "url": { "raw": "{{base_url}}/api/v1/chat", "host": ["{{base_url}}"], "path": ["api","v1","chat"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Has error field', () => pm.expect(pm.response.json()).to.have.property('error'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-P-004 POST /chat – Oversized payload → 413",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"message\": \"{{$randomLoremParagraphs}}{{$randomLoremParagraphs}}{{$randomLoremParagraphs}}\"}" },
+            "url": { "raw": "{{base_url}}/api/v1/chat", "host": ["{{base_url}}"], "path": ["api","v1","chat"] }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.variables.set('bigPayload', 'A'.repeat(1500));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 413', () => pm.response.to.have.status(413));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-P-005 POST /chat – Toxic content → 400",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"message\": \"I want to harm someone\"}" },
+            "url": { "raw": "{{base_url}}/api/v1/chat", "host": ["{{base_url}}"], "path": ["api","v1","chat"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error code is CONTENT_POLICY_VIOLATION', () => {",
+                  "  pm.expect(pm.response.json().code).to.eql('CONTENT_POLICY_VIOLATION');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-P-006 POST /chat – Missing field → 422",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"session_id\": \"only-session\"}" },
+            "url": { "raw": "{{base_url}}/api/v1/chat", "host": ["{{base_url}}"], "path": ["api","v1","chat"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Error mentions message field', () => {",
+                  "  pm.expect(pm.response.json().error).to.include('message');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-P-007 POST /chat – Wrong Content-Type → 415",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "text/plain" }],
+            "body": { "mode": "raw", "raw": "hello world" },
+            "url": { "raw": "{{base_url}}/api/v1/chat", "host": ["{{base_url}}"], "path": ["api","v1","chat"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 415', () => pm.response.to.have.status(415));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📋 Sessions",
+      "item": [
+        {
+          "name": "TC-P-008 GET /sessions/:id",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/v1/sessions/{{session_id}}", "host": ["{{base_url}}"], "path": ["api","v1","sessions","{{session_id}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has session_id', () => pm.expect(pm.response.json()).to.have.property('session_id'));",
+                  "pm.test('Has active field', () => pm.expect(pm.response.json()).to.have.property('active'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-P-009 DELETE /sessions/:id",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{base_url}}/api/v1/sessions/{{session_id}}", "host": ["{{base_url}}"], "path": ["api","v1","sessions","{{session_id}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Confirmation message', () => {",
+                  "  pm.expect(pm.response.json().message).to.include('deleted');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "⭐ Feedback",
+      "item": [
+        {
+          "name": "TC-P-010 POST /feedback – Valid rating",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"session_id\": \"{{session_id}}\", \"rating\": 5, \"comment\": \"Excellent!\"}" },
+            "url": { "raw": "{{base_url}}/api/v1/feedback", "host": ["{{base_url}}"], "path": ["api","v1","feedback"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Has feedback_id', () => pm.expect(pm.response.json()).to.have.property('feedback_id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TC-P-011 POST /feedback – Invalid rating → 422",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"session_id\": \"{{session_id}}\", \"rating\": 10}" },
+            "url": { "raw": "{{base_url}}/api/v1/feedback", "host": ["{{base_url}}"], "path": ["api","v1","feedback"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

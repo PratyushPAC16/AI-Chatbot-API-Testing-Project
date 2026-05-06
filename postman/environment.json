@@ -1,0 +1,9 @@
+{
+  "id": "chatbot-api-env-local",
+  "name": "Local Development",
+  "values": [
+    { "key": "base_url",   "value": "http://localhost:5001", "enabled": true },
+    { "key": "session_id", "value": "postman-session-001",   "enabled": true },
+    { "key": "api_version","value": "v1",                    "enabled": true }
+  ]
+}

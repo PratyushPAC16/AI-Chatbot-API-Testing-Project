@@ -1,0 +1,62 @@
+{
+  "average_accuracy": 0.9252,
+  "pass_rate": "8/8",
+  "scenarios": [
+    {
+      "input": "Hello",
+      "expected": "Hello! How can I assist you today?...",
+      "actual": "Hello! How can I assist you today?...",
+      "accuracy": 1.0,
+      "verdict": "PASS"
+    },
+    {
+      "input": "hi",
+      "expected": "Hi there! What can I help you with?...",
+      "actual": "Hi there! What can I help you with?...",
+      "accuracy": 1.0,
+      "verdict": "PASS"
+    },
+    {
+      "input": "help",
+      "expected": "I can help you with questions, information...",
+      "actual": "I can help you with questions, information, and general assi...",
+      "accuracy": 0.8648,
+      "verdict": "PASS"
+    },
+    {
+      "input": "joke",
+      "expected": "Why don't scientists trust atoms? Because they make up every...",
+      "actual": "Why don't scientists trust atoms? Because they make up every...",
+      "accuracy": 1.0,
+      "verdict": "PASS"
+    },
+    {
+      "input": "bye",
+      "expected": "Goodbye! Have a great day!...",
+      "actual": "Goodbye! Have a great day!...",
+      "accuracy": 1.0,
+      "verdict": "PASS"
+    },
+    {
+      "input": "weather",
+      "expected": "I don't have real-time data...",
+      "actual": "I don't have real-time data, but I can help you find weather...",
+      "accuracy": 0.7928,
+      "verdict": "PASS"
+    },
+    {
+      "input": "what is the time",
+      "expected": "The current server time...",
+      "actual": "The current server time is 20:32....",
+      "accuracy": 0.9196,
+      "verdict": "PASS"
+    },
+    {
+      "input": "random message",
+      "expected": "I understand your query...",
+      "actual": "I understand your query. Let me help you with that....",
+      "accuracy": 0.8243,
+      "verdict": "PASS"
+    }
+  ]
+}

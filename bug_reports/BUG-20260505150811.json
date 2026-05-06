@@ -1,0 +1,22 @@
+{
+  "title": "Empty message returns 200 instead of 422",
+  "severity": "HIGH",
+  "steps_to_reproduce": [
+    "POST /api/v1/chat with body: {\"message\": \"\"}",
+    "Observe HTTP 200 response"
+  ],
+  "expected_behavior": "HTTP 422 with validation error",
+  "actual_behavior": "HTTP 200 with a generic response",
+  "endpoint": "/api/v1/chat",
+  "request_body": {
+    "message": ""
+  },
+  "response_body": {
+    "response": "I understand your query."
+  },
+  "http_status": 200,
+  "environment": "localhost:5001",
+  "reporter": "Automated QA Framework",
+  "timestamp": "2026-05-05T15:08:11.171025",
+  "bug_id": "BUG-20260505150811"
+}
