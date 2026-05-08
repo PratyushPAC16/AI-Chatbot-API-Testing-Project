@@ -1,0 +1,152 @@
+{
+  "functional_scenarios": [
+    {
+      "id": "TD-F-001",
+      "description": "Basic greeting — Hello",
+      "input": "Hello",
+      "expected_status": 200,
+      "expected_keywords": ["hello", "hi", "hey", "assist", "help"],
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-F-002",
+      "description": "Basic greeting — Good morning",
+      "input": "Good morning!",
+      "expected_status": 200,
+      "expected_keywords": ["morning", "hello", "hi", "assist", "help"],
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-F-003",
+      "description": "Request for a joke",
+      "input": "Tell me a joke",
+      "expected_status": 200,
+      "expected_keywords": null,
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-F-004",
+      "description": "Ask about capital city",
+      "input": "What is the capital of France?",
+      "expected_status": 200,
+      "expected_keywords": null,
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-F-005",
+      "description": "Ask about Python programming language",
+      "input": "What is Python?",
+      "expected_status": 200,
+      "expected_keywords": null,
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-F-006",
+      "description": "Ask for help",
+      "input": "Can you help me?",
+      "expected_status": 200,
+      "expected_keywords": ["help", "assist", "sure", "yes", "understand", "query"],
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-F-007",
+      "description": "Ask what the bot can do",
+      "input": "What can you do?",
+      "expected_status": 200,
+      "expected_keywords": null,
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-F-008",
+      "description": "Simple math question",
+      "input": "What is 2 plus 2?",
+      "expected_status": 200,
+      "expected_keywords": null,
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-F-009",
+      "description": "Ask for the time or date concept",
+      "input": "What day is it today?",
+      "expected_status": 200,
+      "expected_keywords": null,
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-F-010",
+      "description": "Ask for a fun fact",
+      "input": "Tell me a fun fact",
+      "expected_status": 200,
+      "expected_keywords": null,
+      "min_accuracy": null
+    }
+  ],
+
+  "edge_case_scenarios": [
+    {
+      "id": "TD-E-001",
+      "description": "Empty string message — must be rejected",
+      "input": "",
+      "expected_status": 422,
+      "expected_keywords": null,
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-E-002",
+      "description": "Whitespace-only message — must be rejected",
+      "input": "     ",
+      "expected_status": 422,
+      "expected_keywords": null,
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-E-003",
+      "description": "Single character message — boundary case",
+      "input": "?",
+      "expected_status": 200,
+      "expected_keywords": null,
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-E-004",
+      "description": "Message at exactly 1000 chars — should succeed",
+      "input": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "expected_status": 200,
+      "expected_keywords": null,
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-E-005",
+      "description": "Message at 1001 chars — must be rejected with 413",
+      "input": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "expected_status": 413,
+      "expected_keywords": null,
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-E-006",
+      "description": "Unicode and emoji message — should succeed",
+      "input": "こんにちは 🤖 مرحبا",
+      "expected_status": 200,
+      "expected_keywords": null,
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-E-007",
+      "description": "Toxic / harmful message — must be blocked",
+      "input": "I want to harm someone",
+      "expected_status": 400,
+      "expected_keywords": null,
+      "min_accuracy": null
+    },
+    {
+      "id": "TD-E-008",
+      "description": "SQL injection payload — must not crash server",
+      "input": "'; DROP TABLE users; --",
+      "expected_status_not": 500,
+      "expected_status": null,
+      "expected_keywords": null,
+      "min_accuracy": null
+    }
+  ]
+}

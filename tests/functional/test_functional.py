@@ -1,5 +1,5 @@
 """
-Functional Test Suite — with Allure Reporting
+Functional Test Suite — with Allure Reporting + JSON-Driven Tests
 ===============================================
 Allure decorators added for beautiful interactive reports.
 
@@ -286,3 +286,144 @@ class TestFeedbackAndHistory:
             data = r.json()
             assert "messages" in data
             assert isinstance(data["messages"], list)
+
+
+# ── JSON-Driven Parametrized Tests ───────────────────────────
+#
+# All test data lives in tests/test_data/chat_scenarios.json.
+# Nothing is hardcoded here — add new scenarios to the JSON file
+# and they automatically become new test cases.
+
+import json
+import pathlib
+
+# Resolve path relative to this file so it works from any CWD
+_DATA_FILE = pathlib.Path(__file__).parent.parent / "test_data" / "chat_scenarios.json"
+
+def _load_scenarios(key: str) -> list[dict]:
+    """Load scenarios from the JSON file under the given top-level key."""
+    with open(_DATA_FILE, encoding="utf-8") as f:
+        data = json.load(f)
+    return data[key]
+
+
+def _functional_ids() -> list[str]:
+    return [s["id"] for s in _load_scenarios("functional_scenarios")]
+
+def _edge_ids() -> list[str]:
+    return [s["id"] for s in _load_scenarios("edge_case_scenarios")]
+
+
+@allure.feature("JSON-Driven Tests")
+class TestDataDriven:
+    """
+    Data-driven tests loaded from tests/test_data/chat_scenarios.json.
+    Each JSON scenario becomes one parametrized test case.
+    """
+
+    # ── Functional scenarios ──────────────────────────────────
+
+    @allure.story("Functional Scenarios")
+    @allure.severity(allure.severity_level.NORMAL)
+    @pytest.mark.parametrize(
+        "scenario",
+        _load_scenarios("functional_scenarios"),
+        ids=_functional_ids(),
+    )
+    def test_functional_scenario(self, scenario: dict):
+        """
+        TC-DD-F: Drive functional chat scenarios from JSON.
+        Validates: HTTP status, optional keyword presence, optional accuracy floor.
+        """
+        allure.dynamic.title(f"{scenario['id']}: {scenario['description']}")
+        allure.attach(
+            json.dumps(scenario, indent=2),
+            name            = "Scenario Definition",
+            attachment_type = allure.attachment_type.JSON,
+        )
+
+        with allure.step(f"POST message: {scenario['input']!r}"):
+            r = requests.post(CHAT_URL, json={"message": scenario["input"]})
+
+        allure.attach(
+            str(r.text),
+            name            = "Raw API Response",
+            attachment_type = allure.attachment_type.TEXT,
+        )
+
+        # ── Status code check ───────────────────────────────
+        with allure.step(f"Assert HTTP status == {scenario['expected_status']}"):
+            assert r.status_code == scenario["expected_status"], (
+                f"Expected {scenario['expected_status']}, got {r.status_code}. "
+                f"Body: {r.text}"
+            )
+
+        # ── Keyword check (only when status is 200 and keywords are defined) ──
+        if scenario["expected_status"] == 200 and scenario.get("expected_keywords"):
+            with allure.step(f"Assert response contains one of: {scenario['expected_keywords']}"):
+                response_text = r.json().get("response", "").lower()
+                assert any(kw.lower() in response_text for kw in scenario["expected_keywords"]), (
+                    f"None of {scenario['expected_keywords']} found in: {response_text!r}"
+                )
+
+        # ── Accuracy check via ResponseValidator ──────────────
+        if scenario["expected_status"] == 200 and scenario.get("min_accuracy") is not None:
+            with allure.step(f"Assert AI accuracy >= {scenario['min_accuracy']}"):
+                result = validator.validate(
+                    expected = scenario["input"],   # use input as rough reference
+                    actual   = r.json().get("response", ""),
+                )
+                allure.attach(
+                    f"Score: {result.accuracy_score}\nVerdict: {result.verdict}",
+                    name            = "Accuracy Result",
+                    attachment_type = allure.attachment_type.TEXT,
+                )
+                assert result.accuracy_score >= scenario["min_accuracy"], (
+                    f"Accuracy {result.accuracy_score} below minimum {scenario['min_accuracy']}"
+                )
+
+    # ── Edge case scenarios ───────────────────────────────────
+
+    @allure.story("Edge Case Scenarios")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @pytest.mark.parametrize(
+        "scenario",
+        _load_scenarios("edge_case_scenarios"),
+        ids=_edge_ids(),
+    )
+    def test_edge_case_scenario(self, scenario: dict):
+        """
+        TC-DD-E: Drive edge case scenarios from JSON.
+        Validates: HTTP status or 'status must NOT be X' constraint.
+        """
+        allure.dynamic.title(f"{scenario['id']}: {scenario['description']}")
+        allure.attach(
+            json.dumps(scenario, indent=2),
+            name            = "Scenario Definition",
+            attachment_type = allure.attachment_type.JSON,
+        )
+
+        with allure.step(f"POST message: {scenario['input']!r}"):
+            r = requests.post(CHAT_URL, json={"message": scenario["input"]})
+
+        allure.attach(
+            str(r.text),
+            name            = "Raw API Response",
+            attachment_type = allure.attachment_type.TEXT,
+        )
+
+        # ── "Must NOT be" constraint (e.g. injection tests) ──
+        if scenario.get("expected_status_not") is not None:
+            with allure.step(f"Assert HTTP status != {scenario['expected_status_not']}"):
+                assert r.status_code != scenario["expected_status_not"], (
+                    f"Server crashed with {scenario['expected_status_not']}! "
+                    f"Input: {scenario['input']!r}"
+                )
+
+        # ── Exact status constraint ───────────────────────────
+        elif scenario.get("expected_status") is not None:
+            with allure.step(f"Assert HTTP status == {scenario['expected_status']}"):
+                assert r.status_code == scenario["expected_status"], (
+                    f"Expected {scenario['expected_status']}, got {r.status_code}. "
+                    f"Body: {r.text}"
+                )
