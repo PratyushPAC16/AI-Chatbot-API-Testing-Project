@@ -47,7 +47,7 @@
     {
       "input": "what is the time",
       "expected": "The current server time...",
-      "actual": "The current server time is 20:32....",
+      "actual": "The current server time is 09:10....",
       "accuracy": 0.9196,
       "verdict": "PASS"
     },

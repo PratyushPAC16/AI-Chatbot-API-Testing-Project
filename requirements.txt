@@ -14,3 +14,6 @@ locust>=2.24.0          # Load and performance testing
 
 # ─── Utilities ───────────────────────────────────────────────────────────────
 python-dotenv>=1.0.0    # Environment variable management
+
+
+allure-pytest>=2.13.0

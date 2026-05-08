@@ -13,6 +13,7 @@ permissions:
   pull-requests: write
 
 jobs:
+
   # ── Job 1: Python Tests ──────────────────────────────────────
   python-tests:
     name: 🐍 Python Tests (pytest)
@@ -31,44 +32,55 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Create required directories
-        run: mkdir -p logs reports bug_reports
+        run: mkdir -p logs reports bug_reports reports/allure-results
 
       - name: Start Mock API server
         run: |
           python src/mock_server/app.py &
           sleep 5
-          curl -f http://localhost:5001/health || (echo "Server failed to start" && exit 1)
+          curl -f http://localhost:5001/health
 
-      - name: Run functional tests
+      - name: Run functional tests with Allure
         run: |
           pytest tests/functional/test_functional.py -v \
             --tb=short \
+            --alluredir=reports/allure-results \
             --junitxml=reports/functional_results.xml
         continue-on-error: true
 
-      - name: Run edge case tests
+      - name: Run edge case tests with Allure
         run: |
           pytest tests/edge_cases/test_edge_cases.py -v \
             --tb=short \
+            --alluredir=reports/allure-results \
             --junitxml=reports/edge_results.xml
         continue-on-error: true
 
-      - name: Run regression tests
+      - name: Run regression tests with Allure
         run: |
           pytest tests/regression/test_regression.py -v \
             --tb=short \
+            --alluredir=reports/allure-results \
             --junitxml=reports/regression_results.xml
         continue-on-error: true
 
-      - name: Upload test reports
+      - name: Upload Allure results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-reports
+          name: allure-results
+          path: reports/allure-results/
+          retention-days: 14
+
+      - name: Upload JUnit reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: junit-reports
           path: reports/
           retention-days: 14
 
-
+          
           # ── Job 1b: Security Tests ────────────────────────────────────
   security-tests:
     name: 🔒 Security Tests
