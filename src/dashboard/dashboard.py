@@ -17,7 +17,7 @@ import json
 import sqlite3
 from pathlib import Path
 from datetime import datetime
-from flask import Flask, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string
 
 app = Flask(__name__)
 
@@ -42,9 +42,38 @@ def query(sql: str, params=()) -> list[dict]:
 
 @app.route("/api/stats")
 def api_stats():
-    """Aggregate statistics for the dashboard."""
-    results = query("SELECT * FROM test_results ORDER BY timestamp DESC LIMIT 500")
-    if not results:
+    """Aggregate statistics for the dashboard with filtering."""
+    status_filter   = request.args.get("status", "ALL")
+    endpoint_filter = request.args.get("endpoint", "ALL")
+    days_filter     = request.args.get("days", "ALL")
+
+    sql = "SELECT * FROM test_results WHERE 1=1"
+    params = []
+
+    if status_filter != "ALL":
+        sql += " AND status = ?"
+        params.append(status_filter)
+
+    if endpoint_filter != "ALL":
+        sql += " AND endpoint = ?"
+        params.append(endpoint_filter)
+
+    if days_filter != "ALL":
+        try:
+            days = int(days_filter)
+            sql += " AND timestamp >= datetime('now', ?)"
+            params.append(f"-{days} days")
+        except ValueError:
+            pass
+
+    sql += " ORDER BY timestamp DESC LIMIT 500"
+    results = query(sql, tuple(params))
+
+    # Fetch unique endpoints across the whole DB for the dropdown
+    all_endpoints = query("SELECT DISTINCT endpoint FROM test_results WHERE endpoint IS NOT NULL")
+    available_endpoints = [r["endpoint"] for r in all_endpoints]
+
+    if not results and status_filter == "ALL" and endpoint_filter == "ALL" and days_filter == "ALL":
         return jsonify({"error": "No test data found. Run tests first."})
 
     total   = len(results)
@@ -59,12 +88,17 @@ def api_stats():
     endpoint_counts = {}
     for r in results:
         ep = r["endpoint"]
-        endpoint_counts[ep] = endpoint_counts.get(ep, 0) + 1
+        if ep:
+            endpoint_counts[ep] = endpoint_counts.get(ep, 0) + 1
 
-    # Group by status over time (last 20 tests)
+    # Group by status over time (last 20 tests from filtered results)
     recent = results[:20]
 
+    # Reverse recent so older is left, newer is right on charts
+    recent_chronological = recent[::-1]
+
     return jsonify({
+        "available_endpoints": available_endpoints,
         "summary": {
             "total":         total,
             "passed":        passed,
@@ -75,16 +109,16 @@ def api_stats():
             "avg_accuracy":  round(sum(accuracies) / len(accuracies) * 100, 1) if accuracies else None,
         },
         "latency_chart": {
-            "labels": [r["test_name"][:20] for r in recent],
-            "data":   [r["latency_ms"] or 0 for r in recent],
+            "labels": [r["test_name"][:20] for r in recent_chronological],
+            "data":   [r["latency_ms"] or 0 for r in recent_chronological],
         },
         "status_pie": {
             "labels": ["PASS", "FAIL", "WARN"],
             "data":   [passed, failed, warned],
         },
         "accuracy_chart": {
-            "labels": [r["test_name"][:20] for r in recent if r.get("accuracy_score")],
-            "data":   [round(r["accuracy_score"] * 100, 1) for r in recent if r.get("accuracy_score")],
+            "labels": [r["test_name"][:20] for r in recent_chronological if r.get("accuracy_score")],
+            "data":   [round(r["accuracy_score"] * 100, 1) for r in recent_chronological if r.get("accuracy_score")],
         },
         "endpoints": {
             "labels": list(endpoint_counts.keys()),
@@ -152,7 +186,28 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     align-items: center;
     gap: 12px;
   }
-  header h1 { font-size: 1.2rem; letter-spacing: 0.05em; }
+  header h1 { font-size: 1.2rem; letter-spacing: 0.05em; margin-right: auto; }
+  
+  .filter-bar {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+  .filter-bar select {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .filter-bar select:focus {
+    outline: none;
+    border-color: var(--blue);
+  }
+
   header .badge {
     background: var(--green);
     color: #000;
@@ -160,8 +215,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     padding: 2px 8px;
     border-radius: 10px;
     font-weight: bold;
+    margin-left: 16px;
   }
-  .ts { margin-left: auto; font-size: 0.75rem; color: var(--muted); }
+  .ts { font-size: 0.75rem; color: var(--muted); margin-left: 8px; }
   main { padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
 
   /* KPI Cards */
@@ -223,6 +279,27 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <header>
   <span>⬡</span>
   <h1>AI CHATBOT QA DASHBOARD</h1>
+  
+  <div class="filter-bar">
+    <select id="filter-days" onchange="loadData()">
+      <option value="ALL">All Time</option>
+      <option value="1">Last 24h</option>
+      <option value="7">Last 7 Days</option>
+      <option value="30">Last 30 Days</option>
+    </select>
+    
+    <select id="filter-status" onchange="loadData()">
+      <option value="ALL">All Status</option>
+      <option value="PASS">PASS</option>
+      <option value="FAIL">FAIL</option>
+      <option value="WARN">WARN</option>
+    </select>
+    
+    <select id="filter-endpoint" onchange="loadData()">
+      <option value="ALL">All Endpoints</option>
+    </select>
+  </div>
+
   <span class="badge">LIVE</span>
   <span class="ts" id="ts">Loading...</span>
 </header>
@@ -279,6 +356,9 @@ const COLORS = {
   blue:   '#58a6ff', purple: '#bc8cff', muted: '#8b949e'
 };
 
+// Keep track of chart instances so we can destroy them before redrawing
+window.charts = {};
+
 function makeKpi(label, value, colorClass) {
   return `<div class="kpi-card ${colorClass}">
     <div class="label">${label}</div>
@@ -287,8 +367,12 @@ function makeKpi(label, value, colorClass) {
 }
 
 function makeChart(id, type, labels, data, color, label) {
+  if (window.charts[id]) {
+    window.charts[id].destroy();
+  }
+  
   const ctx = document.getElementById(id).getContext('2d');
-  return new Chart(ctx, {
+  window.charts[id] = new Chart(ctx, {
     type,
     data: {
       labels,
@@ -308,21 +392,63 @@ function makeChart(id, type, labels, data, color, label) {
       plugins: { legend: { labels: { color: '#8b949e', font: { size: 11 } } } },
       scales: type !== 'pie' && type !== 'doughnut' ? {
         x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#21262d' } },
-        y: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#21262d' } },
+        y: { ticks: { color: '#8b949e', font: { size: 10 }, beginAtZero: true }, grid: { color: '#21262d' } },
       } : {},
     }
   });
 }
 
+function updateEndpointDropdown(endpoints) {
+  const select = document.getElementById('filter-endpoint');
+  const currentVal = select.value;
+  
+  // Keep ALL option
+  let html = '<option value="ALL">All Endpoints</option>';
+  endpoints.forEach(ep => {
+    html += `<option value="${ep}">${ep}</option>`;
+  });
+  select.innerHTML = html;
+  
+  // Restore selection if it still exists
+  if (endpoints.includes(currentVal) || currentVal === 'ALL') {
+    select.value = currentVal;
+  } else {
+    select.value = 'ALL';
+  }
+}
+
 async function loadData() {
   try {
-    const res  = await fetch('/api/stats');
+    const status   = document.getElementById('filter-status').value;
+    const endpoint = document.getElementById('filter-endpoint').value;
+    const days     = document.getElementById('filter-days').value;
+    
+    const params = new URLSearchParams({ status, endpoint, days });
+    const res  = await fetch('/api/stats?' + params.toString());
     const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    
+    if (data.error) {
+       // If filtering resulted in empty set, clear charts but keep dashboard up
+       if (data.error.includes("No test data found") && (status !== 'ALL' || endpoint !== 'ALL' || days !== 'ALL')) {
+         document.getElementById('kpi-grid').innerHTML = '<div style="grid-column: 1/-1; padding: 20px; color: var(--muted)">No results match the current filters.</div>';
+         ['latencyChart', 'pieChart', 'accuracyChart', 'endpointChart'].forEach(id => {
+            if (window.charts[id]) window.charts[id].destroy();
+         });
+         document.getElementById('failures-body').innerHTML = '<tr><td colspan="4" style="color:#3fb950;padding:12px">✅ No failures matching filters</td></tr>';
+         return;
+       }
+       throw new Error(data.error);
+    }
 
     document.getElementById('loader').style.display  = 'none';
     document.getElementById('content').style.display = 'block';
+    document.getElementById('error-msg').style.display = 'none';
     document.getElementById('ts').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+
+    // Update endpoint dropdown with available options from the backend
+    if (data.available_endpoints) {
+      updateEndpointDropdown(data.available_endpoints);
+    }
 
     const s = data.summary;
     document.getElementById('kpi-grid').innerHTML = [
@@ -330,7 +456,7 @@ async function loadData() {
       makeKpi('Passed',         s.passed,                        'green'),
       makeKpi('Failed',         s.failed,                        'red'),
       makeKpi('Warned',         s.warned,                        'yellow'),
-      makeKpi('Pass Rate',      s.pass_rate + '%',               s.pass_rate >= 80 ? 'green' : 'red'),
+      makeKpi('Pass Rate',      s.pass_rate + '%',               s.pass_rate >= 80 ? 'green' : (s.pass_rate > 0 ? 'red' : 'muted')),
       makeKpi('Avg Latency',    s.avg_latency + 'ms',            s.avg_latency < 500 ? 'green' : 'yellow'),
       s.avg_accuracy != null ? makeKpi('Avg Accuracy', s.avg_accuracy + '%', s.avg_accuracy >= 70 ? 'green' : 'yellow') : '',
     ].join('');
@@ -350,6 +476,8 @@ async function loadData() {
         data.accuracy_chart.labels, data.accuracy_chart.data,
         COLORS.purple, 'Accuracy (%)'
       );
+    } else if (window.charts['accuracyChart']) {
+        window.charts['accuracyChart'].destroy();
     }
 
     makeChart('endpointChart', 'bar',
@@ -359,7 +487,7 @@ async function loadData() {
 
     const tbody = document.getElementById('failures-body');
     if (data.recent_failures.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" style="color:#3fb950;padding:12px">✅ No recent failures</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" style="color:#3fb950;padding:12px">✅ No recent failures matching filters</td></tr>';
     } else {
       tbody.innerHTML = data.recent_failures.map(f => `
         <tr>
@@ -378,6 +506,9 @@ async function loadData() {
       '❌ ' + err.message + ' — Run the test suite first: pytest tests/ -v';
   }
 }
+
+// Ensure loadData is bound to window so onchange handlers can see it
+window.loadData = loadData;
 
 loadData();
 setInterval(loadData, 15000);   // Refresh every 15 seconds
