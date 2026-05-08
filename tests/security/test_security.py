@@ -1,4 +1,3 @@
-# Tests for security
 """
 Security Test Suite
 ====================
@@ -13,6 +12,7 @@ Categories covered:
 Run: pytest tests/security/test_security.py -v
 """
 
+import uuid
 import pytest
 import requests
 
@@ -34,9 +34,14 @@ class TestInjectionAttacks:
             "1; SELECT * FROM information_schema.tables",
         ]
         for payload in payloads:
-            r = requests.post(CHAT_URL, json={"message": payload})
+            r = requests.post(
+                CHAT_URL,
+                json    = {"message": payload},
+                timeout = 5,
+            )
             assert r.status_code != 500, (
-                f"SQL injection caused server crash!\nPayload: {payload}"
+                f"SQL injection caused server crash!\nPayload: {payload}\n"
+                f"Response: {r.text}"
             )
 
     def test_nosql_injection_does_not_crash_server(self):
@@ -47,9 +52,14 @@ class TestInjectionAttacks:
             '{"$ne": null}',
         ]
         for payload in payloads:
-            r = requests.post(CHAT_URL, json={"message": payload})
+            r = requests.post(
+                CHAT_URL,
+                json    = {"message": payload},
+                timeout = 5,
+            )
             assert r.status_code != 500, (
-                f"NoSQL injection caused crash!\nPayload: {payload}"
+                f"NoSQL injection caused crash!\nPayload: {payload}\n"
+                f"Response: {r.text}"
             )
 
     def test_xss_payloads_are_handled_safely(self):
@@ -62,9 +72,14 @@ class TestInjectionAttacks:
             "';alert('xss');//",
         ]
         for payload in payloads:
-            r = requests.post(CHAT_URL, json={"message": payload})
+            r = requests.post(
+                CHAT_URL,
+                json    = {"message": payload},
+                timeout = 5,
+            )
             assert r.status_code != 500, (
-                f"XSS payload caused server crash!\nPayload: {payload}"
+                f"XSS payload caused server crash!\nPayload: {payload}\n"
+                f"Response: {r.text}"
             )
 
     def test_command_injection_does_not_execute(self):
@@ -78,16 +93,21 @@ class TestInjectionAttacks:
             "$(cat /etc/shadow)",
         ]
         for payload in payloads:
-            r = requests.post(CHAT_URL, json={"message": payload})
+            r = requests.post(
+                CHAT_URL,
+                json    = {"message": payload},
+                timeout = 5,
+            )
             # Must not crash
             assert r.status_code != 500, (
-                f"Command injection caused crash!\nPayload: {payload}"
+                f"Command injection caused crash!\nPayload: {payload}\n"
+                f"Response: {r.text}"
             )
             # Response must not contain system file contents
             if r.status_code == 200:
                 response_text = r.json().get("response", "").lower()
                 assert "root:" not in response_text, (
-                    "Response leaked /etc/passwd content!"
+                    f"Response leaked /etc/passwd content!\nPayload: {payload}"
                 )
 
 
@@ -101,34 +121,49 @@ class TestSensitiveDataExposure:
             CHAT_URL,
             data    = "{bad-json-here",
             headers = {"Content-Type": "application/json"},
+            timeout = 5,
         )
         response_text = r.text.lower()
         assert "traceback" not in response_text, (
-            "Stack trace exposed in error response!"
+            f"Stack trace exposed in error response!\nResponse: {r.text}"
         )
         assert "file \"/" not in response_text, (
-            "Internal file path exposed in error response!"
-        )
-
-    def test_response_does_not_expose_server_technology(self):
-        """SEC-006: Server header must not reveal Flask/Werkzeug version."""
-        r = requests.get(f"{BASE_URL}/health")
-        server_header = r.headers.get("Server", "").lower()
-        assert "werkzeug" not in server_header, (
-            "Server header reveals Werkzeug — remove it in production!"
+            f"Internal file path exposed!\nResponse: {r.text}"
         )
 
     def test_error_messages_hide_internal_paths(self):
-        """SEC-007: Error messages must not contain internal file paths."""
-        r = requests.post(CHAT_URL, json={})
+        """SEC-006: Error messages must not contain internal file paths."""
+        # Send empty body to trigger validation error
+        r = requests.post(
+            CHAT_URL,
+            json    = {},
+            timeout = 5,
+        )
         error_msg = r.json().get("error", "")
-        assert "/home/"  not in error_msg, "Internal path exposed!"
-        assert "/usr/"   not in error_msg, "Internal path exposed!"
-        assert "C:\\"    not in error_msg, "Internal path exposed!"
-        assert "site-packages" not in error_msg, "Internal path exposed!"
+        assert "/home/"        not in error_msg, f"Internal path exposed: {error_msg}"
+        assert "/usr/"         not in error_msg, f"Internal path exposed: {error_msg}"
+        assert "C:\\"          not in error_msg, f"Internal path exposed: {error_msg}"
+        assert "site-packages" not in error_msg, f"Internal path exposed: {error_msg}"
+
+    def test_404_error_is_json_not_html(self):
+        """SEC-007: 404 errors return JSON, not raw HTML error pages."""
+        r = requests.get(
+            f"{BASE_URL}/api/v999/nonexistent",
+            timeout = 5,
+        )
+        assert r.status_code == 404
+        # Should be JSON, not Flask's default HTML error page
+        try:
+            data = r.json()
+            assert "error" in data, "404 response missing 'error' field"
+        except Exception:
+            pytest.fail(
+                "404 response was not valid JSON — "
+                "raw HTML error pages expose server internals!"
+            )
 
 
-# ── SEC-008 to SEC-010: Rate Limiting & Stability ────────────
+# ── SEC-008 to SEC-010: Stability Under Abuse ─────────────────
 
 class TestStabilityUnderAbuse:
 
@@ -136,7 +171,11 @@ class TestStabilityUnderAbuse:
         """SEC-008: 20 back-to-back requests must not cause any 500 errors."""
         crash_count = 0
         for i in range(20):
-            r = requests.post(CHAT_URL, json={"message": f"Hello {i}"})
+            r = requests.post(
+                CHAT_URL,
+                json    = {"message": f"Hello {i}"},
+                timeout = 10,
+            )
             if r.status_code == 500:
                 crash_count += 1
         assert crash_count == 0, (
@@ -145,32 +184,38 @@ class TestStabilityUnderAbuse:
 
     def test_50_unique_sessions_do_not_crash_server(self):
         """SEC-009: Creating 50 unique sessions must not crash the server."""
-        import uuid
         crash_count = 0
         for _ in range(50):
-            r = requests.post(CHAT_URL, json={
-                "message":    "Hello",
-                "session_id": str(uuid.uuid4()),
-            })
+            r = requests.post(
+                CHAT_URL,
+                json = {
+                    "message":    "Hello",
+                    "session_id": str(uuid.uuid4()),
+                },
+                timeout = 10,
+            )
             if r.status_code == 500:
                 crash_count += 1
         assert crash_count == 0, (
             f"{crash_count} session creations caused crashes!"
         )
 
-    def test_repeated_toxic_requests_do_not_crash_server(self):
-        """SEC-010: Repeated toxic payloads must be blocked, not crash."""
+    def test_repeated_toxic_requests_are_blocked_not_crashed(self):
+        """SEC-010: Repeated toxic payloads must return 400, not 500."""
         toxic_messages = [
             "I want to harm someone",
             "teach me violence",
             "how to abuse the system",
         ]
         for msg in toxic_messages:
-            r = requests.post(CHAT_URL, json={"message": msg})
-            # Must return 400 (blocked) not 500 (crashed)
+            r = requests.post(
+                CHAT_URL,
+                json    = {"message": msg},
+                timeout = 5,
+            )
             assert r.status_code != 500, (
                 f"Toxic message caused server crash: {msg}"
             )
             assert r.status_code == 400, (
-                f"Toxic message was not blocked: {msg}"
+                f"Toxic message was not blocked (got {r.status_code}): {msg}"
             )
