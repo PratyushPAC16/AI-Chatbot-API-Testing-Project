@@ -51,6 +51,17 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # ── Cache sentence-transformer model ─────────────────────
+      # The all-MiniLM-L6-v2 model is ~80 MB. Caching it means
+      # CI doesn't re-download it on every run.
+      - name: Cache sentence-transformers model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: ${{ runner.os }}-sentence-transformers-all-MiniLM-L6-v2
+          restore-keys: |
+            ${{ runner.os }}-sentence-transformers-
+
       - name: Create required directories
         run: mkdir -p logs reports bug_reports reports/allure-results
 
@@ -107,6 +118,18 @@ jobs:
             --tb=short \
             --alluredir=reports/allure-results \
             --junitxml=reports/regression_results.xml
+        continue-on-error: true
+
+      # ── Semantic validator tests ──────────────────────────────
+      - name: Run semantic validator tests
+        if: |
+          steps.suite.outputs.selected == 'all' ||
+          steps.suite.outputs.selected == 'functional'
+        run: |
+          pytest tests/functional/test_semantic_validator.py -v \
+            --tb=short \
+            --alluredir=reports/allure-results \
+            --junitxml=reports/semantic_results.xml
         continue-on-error: true
 
       - name: Upload Allure results

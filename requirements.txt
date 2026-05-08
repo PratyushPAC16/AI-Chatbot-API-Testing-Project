@@ -17,3 +17,8 @@ python-dotenv>=1.0.0    # Load .env files (required for real API tests)
 
 # ─── Reporting ───────────────────────────────────────────────────────────────
 allure-pytest>=2.13.0   # Allure test report decorators + results
+
+# ─── AI / ML ─────────────────────────────────────────────────────────────────
+sentence-transformers==2.7.0  # Semantic similarity validator (all-MiniLM-L6-v2)
+transformers==4.40.2           # Required for sentence-transformers 2.7.0 compatibility
+
