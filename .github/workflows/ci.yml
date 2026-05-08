@@ -14,7 +14,7 @@ permissions:
 
 jobs:
 
-  # ── Job 1: Python Tests ──────────────────────────────────────
+  # ── Job 1a: Python Tests ─────────────────────────────────────
   python-tests:
     name: 🐍 Python Tests (pytest)
     runs-on: ubuntu-latest
@@ -80,8 +80,7 @@ jobs:
           path: reports/
           retention-days: 14
 
-          
-          # ── Job 1b: Security Tests ────────────────────────────────────
+  # ── Job 1b: Security Tests ────────────────────────────────────
   security-tests:
     name: 🔒 Security Tests
     runs-on: ubuntu-latest
@@ -213,16 +212,50 @@ jobs:
           path: reports/
           retention-days: 14
 
-  # ── Job 4: Notify ─────────────────────────────────────────────
+  # ── Job 4: Slack Notify on Failure ───────────────────────────
   notify:
-    name: 🔔 Notify
+    name: 🔔 Slack Notify on Failure
     runs-on: ubuntu-latest
-    needs: [python-tests, newman-tests]
+    # Run after ALL jobs; only proceed when at least one failed
+    needs: [python-tests, security-tests, newman-tests, load-test]
     if: failure()
 
     steps:
-      - name: Report failure
+      - name: Send Slack failure alert
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          echo "Tests failed on branch ${{ github.ref }}"
-          echo "Commit SHA : ${{ github.sha }}"
-          echo "Pushed by  : ${{ github.actor }}"
+          # Build a short, informative payload
+          REPO="${{ github.repository }}"
+          BRANCH="${{ github.ref_name }}"
+          SHA="${{ github.sha }}"
+          SHORT_SHA="${SHA:0:7}"
+          ACTOR="${{ github.actor }}"
+          RUN_ID="${{ github.run_id }}"
+          RUN_URL="https://github.com/${REPO}/actions/runs/${RUN_ID}"
+
+          PAYLOAD=$(cat <<EOF
+          {
+            "text": "🚨 *CI Pipeline Failed*",
+            "attachments": [
+              {
+                "color": "#FF0000",
+                "fields": [
+                  { "title": "Repository", "value": "${REPO}",                       "short": true },
+                  { "title": "Branch",     "value": "${BRANCH}",                     "short": true },
+                  { "title": "Commit",     "value": "\`${SHORT_SHA}\`",              "short": true },
+                  { "title": "Pushed by",  "value": "${ACTOR}",                      "short": true },
+                  { "title": "Run URL",    "value": "<${RUN_URL}|View Failed Run>",  "short": false }
+                ],
+                "footer": "GitHub Actions",
+                "ts": $(date +%s)
+              }
+            ]
+          }
+          EOF
+          )
+
+          curl -s -X POST \
+            -H 'Content-type: application/json' \
+            --data "$PAYLOAD" \
+            "$SLACK_WEBHOOK_URL"
