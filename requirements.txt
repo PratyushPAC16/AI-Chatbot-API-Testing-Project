@@ -13,7 +13,7 @@ pytest-html>=4.1.0      # HTML test report generation
 locust>=2.24.0          # Load and performance testing
 
 # ─── Utilities ───────────────────────────────────────────────────────────────
-python-dotenv>=1.0.0    # Environment variable management
+python-dotenv>=1.0.0    # Load .env files (required for real API tests)
 
-
-allure-pytest>=2.13.0
+# ─── Reporting ───────────────────────────────────────────────────────────────
+allure-pytest>=2.13.0   # Allure test report decorators + results

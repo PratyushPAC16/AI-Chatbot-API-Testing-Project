@@ -7,7 +7,12 @@ __pycache__/
 # Virtual environment
 venv/
 env/
+
+# Environment secrets — NEVER commit these
 .env
+.env.local
+.env.*.local
+# Note: .env.example IS committed (it has no real secrets)
 
 # Logs and databases (auto-generated, don't need in repo)
 logs/*.json
