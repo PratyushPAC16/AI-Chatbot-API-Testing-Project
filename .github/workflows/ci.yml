@@ -1,10 +1,30 @@
 name: AI Chatbot API – Test Suite CI
 
 on:
+  # ── Trigger 1: Push / PR to main ────────────────────────────
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+
+  # ── Trigger 2: Nightly at midnight UTC ──────────────────────
+  schedule:
+    - cron: '0 0 * * *'
+
+  # ── Trigger 3: Manual run with suite selector ───────────────
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Which test suite to run?'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - functional
+          - edge_cases
+          - regression
+          - security
 
 # ── Give the workflow the permissions it needs ────────────────
 permissions:
@@ -40,7 +60,24 @@ jobs:
           sleep 5
           curl -f http://localhost:5001/health
 
+      # ── Resolve which suite to run ───────────────────────────
+      # For push/PR/schedule, default to "all".
+      # For manual triggers, use the dropdown value.
+      - name: Resolve test suite selection
+        id: suite
+        run: |
+          SUITE="${{ github.event.inputs.test_suite }}"
+          if [ -z "$SUITE" ]; then
+            SUITE="all"
+          fi
+          echo "selected=$SUITE" >> "$GITHUB_OUTPUT"
+          echo "Running suite: $SUITE"
+
+      # ── Functional tests ─────────────────────────────────────
       - name: Run functional tests with Allure
+        if: |
+          steps.suite.outputs.selected == 'all' ||
+          steps.suite.outputs.selected == 'functional'
         run: |
           pytest tests/functional/test_functional.py -v \
             --tb=short \
@@ -48,7 +85,11 @@ jobs:
             --junitxml=reports/functional_results.xml
         continue-on-error: true
 
+      # ── Edge case tests ──────────────────────────────────────
       - name: Run edge case tests with Allure
+        if: |
+          steps.suite.outputs.selected == 'all' ||
+          steps.suite.outputs.selected == 'edge_cases'
         run: |
           pytest tests/edge_cases/test_edge_cases.py -v \
             --tb=short \
@@ -56,7 +97,11 @@ jobs:
             --junitxml=reports/edge_results.xml
         continue-on-error: true
 
+      # ── Regression tests ─────────────────────────────────────
       - name: Run regression tests with Allure
+        if: |
+          steps.suite.outputs.selected == 'all' ||
+          steps.suite.outputs.selected == 'regression'
         run: |
           pytest tests/regression/test_regression.py -v \
             --tb=short \
@@ -85,6 +130,11 @@ jobs:
     name: 🔒 Security Tests
     runs-on: ubuntu-latest
     needs: python-tests
+    # Skip this job when a manual run targets a non-security suite
+    if: |
+      github.event.inputs.test_suite == '' ||
+      github.event.inputs.test_suite == 'all' ||
+      github.event.inputs.test_suite == 'security'
 
     steps:
       - name: Checkout code
@@ -125,6 +175,10 @@ jobs:
     name: 📮 Newman / Postman Tests
     runs-on: ubuntu-latest
     needs: [python-tests, security-tests]
+    # Only run on push/PR/schedule — not on manual single-suite runs
+    if: |
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.test_suite == 'all'
 
     steps:
       - name: Checkout code
@@ -170,7 +224,10 @@ jobs:
     name: 🔥 Load Test (Locust)
     runs-on: ubuntu-latest
     needs: python-tests
-    if: github.ref == 'refs/heads/main'
+    # Run on push to main, nightly schedule, or manual "all" — not on PRs
+    if: |
+      (github.ref == 'refs/heads/main' && github.event_name != 'pull_request') &&
+      (github.event_name != 'workflow_dispatch' || github.event.inputs.test_suite == 'all')
 
     steps:
       - name: Checkout code
@@ -216,7 +273,6 @@ jobs:
   notify:
     name: 🔔 Slack Notify on Failure
     runs-on: ubuntu-latest
-    # Run after ALL jobs; only proceed when at least one failed
     needs: [python-tests, security-tests, newman-tests, load-test]
     if: failure()
 
@@ -225,7 +281,6 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          # Build a short, informative payload
           REPO="${{ github.repository }}"
           BRANCH="${{ github.ref_name }}"
           SHA="${{ github.sha }}"
@@ -234,6 +289,17 @@ jobs:
           RUN_ID="${{ github.run_id }}"
           RUN_URL="https://github.com/${REPO}/actions/runs/${RUN_ID}"
 
+          # Label the trigger source so Slack message is self-explanatory
+          EVENT="${{ github.event_name }}"
+          if [ "$EVENT" = "schedule" ]; then
+            TRIGGER="⏰ Nightly scheduled run"
+          elif [ "$EVENT" = "workflow_dispatch" ]; then
+            SUITE="${{ github.event.inputs.test_suite }}"
+            TRIGGER="🖱️ Manual trigger (suite: ${SUITE})"
+          else
+            TRIGGER="🔀 Push / Pull Request"
+          fi
+
           PAYLOAD=$(cat <<EOF
           {
             "text": "🚨 *CI Pipeline Failed*",
@@ -241,10 +307,11 @@ jobs:
               {
                 "color": "#FF0000",
                 "fields": [
-                  { "title": "Repository", "value": "${REPO}",                       "short": true },
-                  { "title": "Branch",     "value": "${BRANCH}",                     "short": true },
-                  { "title": "Commit",     "value": "\`${SHORT_SHA}\`",              "short": true },
-                  { "title": "Pushed by",  "value": "${ACTOR}",                      "short": true },
+                  { "title": "Repository", "value": "${REPO}",                       "short": true  },
+                  { "title": "Branch",     "value": "${BRANCH}",                     "short": true  },
+                  { "title": "Commit",     "value": "\`${SHORT_SHA}\`",              "short": true  },
+                  { "title": "Pushed by",  "value": "${ACTOR}",                      "short": true  },
+                  { "title": "Trigger",    "value": "${TRIGGER}",                    "short": false },
                   { "title": "Run URL",    "value": "<${RUN_URL}|View Failed Run>",  "short": false }
                 ],
                 "footer": "GitHub Actions",
